@@ -4,8 +4,21 @@ const Sale = require("../models/Sale");
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
 
-// Builds the full AI recommendation for a single product by gathering its
-// historical sales + supplier info, then calling the Python AI service.
+function buildPayload(product, sales) {
+  return {
+    product_id: product._id.toString(),
+    product_name: product.name,
+    current_stock: product.currentStock,
+    min_stock_level: product.minStockLevel,
+    supplier_lead_time_days: product.supplier ? product.supplier.leadTimeDays : 7,
+    unit_price: product.unitPrice || 0,
+    sales_history: sales.map((s) => ({
+      date: s.date.toISOString().slice(0, 10),
+      quantity_sold: s.quantitySold,
+    })),
+  };
+}
+
 exports.getRecommendation = async (req, res) => {
   try {
     const { productId } = req.params;
@@ -18,29 +31,21 @@ exports.getRecommendation = async (req, res) => {
       return res.status(400).json({ error: "No historical sales data for this product yet" });
     }
 
-    const payload = {
-      product_id: product._id.toString(),
-      product_name: product.name,
-      current_stock: product.currentStock,
-      min_stock_level: product.minStockLevel,
-      supplier_lead_time_days: product.supplier ? product.supplier.leadTimeDays : 7,
-      sales_history: sales.map((s) => ({
-        date: s.date.toISOString().slice(0, 10),
-        quantity_sold: s.quantitySold,
-      })),
-    };
-
-    const { data } = await axios.post(`${AI_SERVICE_URL}/analyze`, payload);
+    const { data } = await axios.post(`${AI_SERVICE_URL}/analyze`, buildPayload(product, sales), {
+      timeout: 20000,
+    });
     res.json(data);
   } catch (err) {
     if (err.response) {
       return res.status(err.response.status).json(err.response.data);
     }
-    res.status(500).json({ error: err.message });
+    res.status(502).json({
+      error: "AI service unavailable. Start the Python service on port 8000.",
+      detail: err.message,
+    });
   }
 };
 
-// Runs the recommendation for every product, used to populate the dashboard.
 exports.getAllRecommendations = async (req, res) => {
   try {
     const products = await Product.find().populate("supplier");
@@ -50,23 +55,19 @@ exports.getAllRecommendations = async (req, res) => {
       const sales = await Sale.find({ product: product._id }).sort({ date: 1 });
       if (sales.length === 0) continue;
 
-      const payload = {
-        product_id: product._id.toString(),
-        product_name: product.name,
-        current_stock: product.currentStock,
-        min_stock_level: product.minStockLevel,
-        supplier_lead_time_days: product.supplier ? product.supplier.leadTimeDays : 7,
-        sales_history: sales.map((s) => ({
-          date: s.date.toISOString().slice(0, 10),
-          quantity_sold: s.quantitySold,
-        })),
-      };
-
       try {
-        const { data } = await axios.post(`${AI_SERVICE_URL}/analyze`, payload);
+        const { data } = await axios.post(
+          `${AI_SERVICE_URL}/analyze`,
+          buildPayload(product, sales),
+          { timeout: 20000 }
+        );
         results.push(data);
       } catch (innerErr) {
-        results.push({ product_id: product._id.toString(), error: "AI analysis failed" });
+        results.push({
+          product_id: product._id.toString(),
+          product_name: product.name,
+          error: innerErr.response?.data?.detail || innerErr.message || "AI analysis failed",
+        });
       }
     }
 

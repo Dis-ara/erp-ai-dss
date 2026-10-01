@@ -1,74 +1,112 @@
-"""
-Fuzzy Logic Inventory Risk Assessment module.
+"""Inventory risk using scikit-fuzzy when available, with a ratio fallback.
 
-Inputs: current stock (relative to a reasonable max reference), predicted
-demand, and supplier lead time (days).
-Output: a crisp risk score 0-100 plus a linguistic risk category, derived
-from Mamdani-style fuzzy rules (as outlined in the project proposal).
+Predicted demand is treated as the next sales-period volume (same cadence as
+the history, typically monthly). Lead time is converted into covering periods.
 """
 
-import numpy as np
-import skfuzzy as fuzz
-from skfuzzy import control as ctrl
 
-# Universe ranges - tuned generically; stock/demand are expressed as a ratio
-# so the same rule base works across products with very different volumes.
-stock_ratio = ctrl.Antecedent(np.arange(0, 3.01, 0.01), "stock_ratio")  # current_stock / predicted_demand
-lead_time = ctrl.Antecedent(np.arange(0, 61, 1), "lead_time")  # days
-risk = ctrl.Consequent(np.arange(0, 101, 1), "risk")
-
-# Membership functions
-stock_ratio["low"] = fuzz.trimf(stock_ratio.universe, [0, 0, 0.8])
-stock_ratio["medium"] = fuzz.trimf(stock_ratio.universe, [0.5, 1.0, 1.5])
-stock_ratio["high"] = fuzz.trimf(stock_ratio.universe, [1.2, 3.0, 3.0])
-
-lead_time["short"] = fuzz.trimf(lead_time.universe, [0, 0, 15])
-lead_time["medium"] = fuzz.trimf(lead_time.universe, [10, 22, 35])
-lead_time["long"] = fuzz.trimf(lead_time.universe, [25, 60, 60])
-
-risk["low"] = fuzz.trimf(risk.universe, [0, 0, 40])
-risk["medium"] = fuzz.trimf(risk.universe, [25, 50, 75])
-risk["high"] = fuzz.trimf(risk.universe, [60, 80, 100])
-risk["critical"] = fuzz.trimf(risk.universe, [85, 100, 100])
-
-rules = [
-    ctrl.Rule(stock_ratio["low"] & lead_time["long"], risk["critical"]),
-    ctrl.Rule(stock_ratio["low"] & lead_time["medium"], risk["high"]),
-    ctrl.Rule(stock_ratio["low"] & lead_time["short"], risk["medium"]),
-    ctrl.Rule(stock_ratio["medium"] & lead_time["long"], risk["high"]),
-    ctrl.Rule(stock_ratio["medium"] & lead_time["medium"], risk["medium"]),
-    ctrl.Rule(stock_ratio["medium"] & lead_time["short"], risk["low"]),
-    ctrl.Rule(stock_ratio["high"] & lead_time["long"], risk["medium"]),
-    ctrl.Rule(stock_ratio["high"] & lead_time["medium"], risk["low"]),
-    ctrl.Rule(stock_ratio["high"] & lead_time["short"], risk["low"]),
-]
-
-risk_ctrl_system = ctrl.ControlSystem(rules)
+def _coverage(inventory_level, predicted_demand, supplier_lead_time, period_days=30.0):
+    demand_per_day = float(predicted_demand) / max(float(period_days), 1.0)
+    required = demand_per_day * max(float(supplier_lead_time), 1.0)
+    if required <= 0:
+        return 2.0, 0.0
+    return min(max(float(inventory_level) / required, 0.0), 2.0), required
 
 
-def _categorize(score):
-    if score >= 85:
-        return "CRITICAL"
-    if score >= 60:
-        return "HIGH"
-    if score >= 35:
-        return "MEDIUM"
-    return "LOW"
+def _ratio_risk(inventory_level, predicted_demand, supplier_lead_time, period_days=30.0):
+    coverage, required = _coverage(inventory_level, predicted_demand, supplier_lead_time, period_days)
+    if required <= 0:
+        return {"risk_level": "LOW", "risk_score": 0, "method": "ratio", "stock_ratio": 2.0}
+
+    if coverage < 0.5:
+        risk_level, risk_score = "CRITICAL", 90
+    elif coverage < 0.75:
+        risk_level, risk_score = "HIGH", 75
+    elif coverage < 1.0:
+        risk_level, risk_score = "MEDIUM", 50
+    else:
+        risk_level, risk_score = "LOW", 20
+
+    return {
+        "risk_level": risk_level,
+        "risk_score": risk_score,
+        "method": "ratio",
+        "stock_ratio": round(float(coverage), 3),
+        "required_stock": round(float(required), 2),
+    }
 
 
-def assess_risk(current_stock, predicted_demand, supplier_lead_time_days):
-    """
-    Returns: {"risk_score": float, "risk_level": str}
-    """
-    # Avoid division by zero; if there's no predicted demand, ratio is capped high (safe)
-    ratio = current_stock / predicted_demand if predicted_demand > 0 else 3.0
-    ratio = min(ratio, 3.0)
-    lead = min(max(supplier_lead_time_days, 0), 60)
+def _fuzzy_risk(inventory_level, predicted_demand, supplier_lead_time, period_days=30.0):
+    import numpy as np
+    import skfuzzy as fuzz
+    from skfuzzy import control as ctrl
 
-    sim = ctrl.ControlSystemSimulation(risk_ctrl_system)
-    sim.input["stock_ratio"] = ratio
-    sim.input["lead_time"] = lead
+    coverage, required = _coverage(inventory_level, predicted_demand, supplier_lead_time, period_days)
+    lead = min(max(float(supplier_lead_time), 0.0), 60.0)
+
+    coverage_in = ctrl.Antecedent(np.arange(0, 2.01, 0.01), "coverage")
+    lead_in = ctrl.Antecedent(np.arange(0, 60.01, 0.1), "lead")
+    risk_out = ctrl.Consequent(np.arange(0, 101, 1), "risk")
+
+    coverage_in["low"] = fuzz.trimf(coverage_in.universe, [0, 0, 0.7])
+    coverage_in["medium"] = fuzz.trimf(coverage_in.universe, [0.4, 1.0, 1.4])
+    coverage_in["high"] = fuzz.trimf(coverage_in.universe, [1.0, 2.0, 2.0])
+
+    lead_in["short"] = fuzz.trimf(lead_in.universe, [0, 0, 14])
+    lead_in["medium"] = fuzz.trimf(lead_in.universe, [7, 21, 35])
+    lead_in["long"] = fuzz.trimf(lead_in.universe, [28, 60, 60])
+
+    risk_out["LOW"] = fuzz.trimf(risk_out.universe, [0, 0, 35])
+    risk_out["MEDIUM"] = fuzz.trimf(risk_out.universe, [20, 45, 70])
+    risk_out["HIGH"] = fuzz.trimf(risk_out.universe, [55, 75, 90])
+    risk_out["CRITICAL"] = fuzz.trimf(risk_out.universe, [80, 100, 100])
+
+    rules = [
+        ctrl.Rule(coverage_in["low"] & lead_in["long"], risk_out["CRITICAL"]),
+        ctrl.Rule(coverage_in["low"] & lead_in["medium"], risk_out["HIGH"]),
+        ctrl.Rule(coverage_in["low"] & lead_in["short"], risk_out["HIGH"]),
+        ctrl.Rule(coverage_in["medium"] & lead_in["long"], risk_out["HIGH"]),
+        ctrl.Rule(coverage_in["medium"] & lead_in["medium"], risk_out["MEDIUM"]),
+        ctrl.Rule(coverage_in["medium"] & lead_in["short"], risk_out["MEDIUM"]),
+        ctrl.Rule(coverage_in["high"] & lead_in["long"], risk_out["MEDIUM"]),
+        ctrl.Rule(coverage_in["high"] & lead_in["medium"], risk_out["LOW"]),
+        ctrl.Rule(coverage_in["high"] & lead_in["short"], risk_out["LOW"]),
+    ]
+
+    system = ctrl.ControlSystem(rules)
+    sim = ctrl.ControlSystemSimulation(system)
+    sim.input["coverage"] = float(coverage)
+    sim.input["lead"] = lead
     sim.compute()
-
     score = float(sim.output["risk"])
-    return {"risk_score": round(score, 2), "risk_level": _categorize(score)}
+
+    if score >= 80:
+        level = "CRITICAL"
+    elif score >= 60:
+        level = "HIGH"
+    elif score >= 35:
+        level = "MEDIUM"
+    else:
+        level = "LOW"
+
+    return {
+        "risk_level": level,
+        "risk_score": round(score, 1),
+        "method": "fuzzy",
+        "stock_ratio": round(float(coverage), 3),
+        "required_stock": round(float(required), 2),
+    }
+
+
+def assess_risk(inventory_level=None, predicted_demand=None, supplier_lead_time=None, **kwargs):
+    if inventory_level is None:
+        inventory_level = kwargs.get("current_stock", 0)
+    if supplier_lead_time is None:
+        supplier_lead_time = kwargs.get("supplier_lead_time_days", 7)
+    predicted_demand = predicted_demand if predicted_demand is not None else 0
+    period_days = kwargs.get("period_days", 30.0)
+
+    try:
+        return _fuzzy_risk(inventory_level, predicted_demand, supplier_lead_time, period_days)
+    except Exception:
+        return _ratio_risk(inventory_level, predicted_demand, supplier_lead_time, period_days)

@@ -1,63 +1,101 @@
 """
-Demand Forecasting module.
-
-Uses historical sales data (date + quantity_sold) to predict demand for the
-next period. For a small SME dataset a simple, explainable model is more
-appropriate than a deep model, so this uses linear regression over a
-time-indexed, monthly-aggregated series with a fallback to a weighted
-moving average when there isn't enough history for a trend fit.
+Demand forecasting: trained sklearn model when feature inputs are given,
+plus a linear-regression trend model when only sales history is available.
 """
 
-import pandas as pd
+import joblib
 import numpy as np
+import pandas as pd
+from pathlib import Path
 from sklearn.linear_model import LinearRegression
 
 
-def _monthly_series(sales_history):
-    """Aggregate a list of {date, quantity_sold} dicts into a monthly series."""
-    df = pd.DataFrame(sales_history)
-    df["date"] = pd.to_datetime(df["date"])
-    df["period"] = df["date"].dt.to_period("M")
-    monthly = df.groupby("period")["quantity_sold"].sum().sort_index()
-    return monthly
+MODEL_PATH = Path(__file__).resolve().parent / "model" / "demand_model.pkl"
+
+try:
+    trained_model = joblib.load(MODEL_PATH)
+except Exception:
+    trained_model = None
 
 
-def forecast_demand(sales_history, periods_ahead=1):
-    """
-    sales_history: list of dicts like {"date": "2026-01-15", "quantity_sold": 12}
-    Returns: {
-        "predicted_demand": float,
-        "method": str,
-        "history_points": int
-    }
-    """
-    monthly = _monthly_series(sales_history)
-
-    if len(monthly) == 0:
-        return {"predicted_demand": 0.0, "method": "no_data", "history_points": 0}
-
-    if len(monthly) < 3:
-        # Not enough points for a trend line - use weighted moving average
-        weights = np.arange(1, len(monthly) + 1)
-        avg = np.average(monthly.values, weights=weights)
+def forecast_from_sales(sales_history):
+    """Linear regression on chronological sales quantities (next period)."""
+    y = np.array(
+        [float(s.get("quantity_sold", 0) or 0) for s in sales_history],
+        dtype=float,
+    )
+    if len(y) == 0:
         return {
-            "predicted_demand": round(float(avg), 2),
-            "method": "weighted_moving_average",
-            "history_points": int(len(monthly)),
+            "predicted_demand": 0.0,
+            "method": "empty_history",
+            "r2": None,
+            "history": [],
+        }
+    if len(y) == 1:
+        return {
+            "predicted_demand": round(float(y[0]), 2),
+            "method": "last_value",
+            "r2": None,
+            "history": y.tolist(),
         }
 
-    # Linear regression on month index vs quantity to capture trend + growth
-    X = np.arange(len(monthly)).reshape(-1, 1)
-    y = monthly.values
-    model = LinearRegression()
-    model.fit(X, y)
-
-    future_X = np.arange(len(monthly), len(monthly) + periods_ahead).reshape(-1, 1)
-    prediction = model.predict(future_X)
-    predicted_demand = max(float(prediction[-1]), 0.0)  # demand can't be negative
-
+    X = np.arange(len(y)).reshape(-1, 1)
+    model = LinearRegression().fit(X, y)
+    predicted = max(float(model.predict(np.array([[len(y)]]))[0]), 0.0)
     return {
-        "predicted_demand": round(predicted_demand, 2),
+        "predicted_demand": round(predicted, 2),
         "method": "linear_regression",
-        "history_points": int(len(monthly)),
+        "slope": round(float(model.coef_[0]), 4),
+        "r2": round(float(model.score(X, y)), 3),
+        "history": [round(v, 2) for v in y.tolist()],
     }
+
+
+def forecast_with_model(
+    inventory_level,
+    units_sold,
+    units_ordered,
+    supplier_lead_time,
+    price,
+    discount_percent,
+    promotion,
+):
+    if trained_model is None:
+        raise RuntimeError("Trained demand model is not available")
+
+    data = pd.DataFrame(
+        [
+            {
+                "Inventory_Level": inventory_level,
+                "Units_Sold": units_sold,
+                "Units_Ordered": units_ordered,
+                "Supplier_Lead_Time": supplier_lead_time,
+                "Price": price,
+                "Discount_Percent": discount_percent,
+                "Promotion": promotion,
+            }
+        ]
+    )
+    prediction = trained_model.predict(data)
+    predicted_demand = max(float(prediction[0]), 0.0)
+    return round(predicted_demand, 2)
+
+
+def forecast_demand(*args, **kwargs):
+    """
+    Dual entry point:
+    - forecast_demand(sales_list) -> dict (used by /analyze)
+    - forecast_demand(inventory, sold, ordered, lead, price, discount, promo) -> float
+    """
+    if args and isinstance(args[0], list):
+        return forecast_from_sales(args[0])
+
+    return forecast_with_model(
+        kwargs.get("inventory_level", args[0] if len(args) > 0 else 0),
+        kwargs.get("units_sold", args[1] if len(args) > 1 else 0),
+        kwargs.get("units_ordered", args[2] if len(args) > 2 else 0),
+        kwargs.get("supplier_lead_time", args[3] if len(args) > 3 else 0),
+        kwargs.get("price", args[4] if len(args) > 4 else 0),
+        kwargs.get("discount_percent", args[5] if len(args) > 5 else 0),
+        kwargs.get("promotion", args[6] if len(args) > 6 else 0),
+    )

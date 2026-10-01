@@ -1,53 +1,62 @@
-"""
-Rule-Based Reasoning module for reorder recommendations.
-
-Combines the forecasted demand and the fuzzy risk assessment into an
-explainable recommendation, following the rules described in the project
-proposal (section 7.3).
-"""
+"""Rule-based reorder recommendation with explainable reason text."""
 
 
-def recommend_reorder(current_stock, predicted_demand, risk_level, min_stock_level=0):
-    """
-    Returns: {
-        "action": "NO_REORDER" | "REORDER" | "URGENT_REORDER",
-        "recommended_quantity": float,
-        "priority": "LOW" | "MEDIUM" | "HIGH",
-        "reason": str
-    }
-    """
-    shortfall = predicted_demand - current_stock
-    safety_stock = max(min_stock_level, 0.1 * predicted_demand)
+def recommend_reorder(
+    inventory_level=None,
+    predicted_demand=None,
+    risk_level="LOW",
+    min_stock_level=0,
+    **kwargs,
+):
+    if inventory_level is None:
+        inventory_level = kwargs.get("current_stock", 0)
+    predicted_demand = predicted_demand if predicted_demand is not None else 0
+    min_stock_level = kwargs.get("min_stock_level", min_stock_level) or 0
+    lead_time = float(kwargs.get("supplier_lead_time_days", kwargs.get("supplier_lead_time", 7)) or 7)
+    period_days = float(kwargs.get("period_days", 30) or 30)
 
-    if predicted_demand <= current_stock and risk_level in ("LOW", "MEDIUM"):
+    lead_demand = predicted_demand * (lead_time / period_days)
+    target = max(lead_demand + min_stock_level, predicted_demand, min_stock_level)
+    shortfall = max(target - inventory_level, 0)
+    below_min = inventory_level <= min_stock_level
+
+    def pack(action, quantity, priority, reason):
         return {
-            "action": "NO_REORDER",
-            "recommended_quantity": 0,
-            "priority": "LOW",
-            "reason": "Current stock covers predicted demand and risk is acceptable.",
+            "recommendation": action.replace("_", " "),
+            "action": action,
+            "quantity": int(round(quantity)),
+            "recommended_quantity": int(round(quantity)),
+            "priority": priority,
+            "reason": reason,
         }
 
-    if risk_level == "CRITICAL" or (shortfall > 0 and risk_level == "HIGH"):
-        quantity = max(shortfall + safety_stock, safety_stock)
-        return {
-            "action": "URGENT_REORDER",
-            "recommended_quantity": round(quantity, 2),
-            "priority": "HIGH",
-            "reason": "Predicted demand exceeds current stock and inventory risk is high/critical.",
-        }
+    if risk_level == "CRITICAL" or (below_min and predicted_demand > inventory_level):
+        return pack(
+            "URGENT_REORDER",
+            max(shortfall, 1) if shortfall == 0 and below_min else shortfall,
+            "HIGH",
+            "Stock cannot cover forecasted demand across supplier lead time. Reorder before a stock-out.",
+        )
 
-    if shortfall > 0 or risk_level == "HIGH":
-        quantity = max(shortfall + safety_stock, safety_stock)
-        return {
-            "action": "REORDER",
-            "recommended_quantity": round(quantity, 2),
-            "priority": "MEDIUM",
-            "reason": "Predicted demand is close to or above current stock, or risk is elevated.",
-        }
+    if risk_level == "HIGH":
+        return pack(
+            "REORDER",
+            shortfall,
+            "HIGH",
+            "High stock-out risk versus lead-time demand. Place a replenishment order.",
+        )
 
-    return {
-        "action": "NO_REORDER",
-        "recommended_quantity": 0,
-        "priority": "LOW",
-        "reason": "No immediate reorder need identified.",
-    }
+    if risk_level == "MEDIUM" or below_min:
+        return pack(
+            "REORDER",
+            shortfall,
+            "MEDIUM",
+            "Inventory is tight versus demand or the minimum stock policy. Plan a replenishment.",
+        )
+
+    return pack(
+        "NO_REORDER",
+        0,
+        "LOW",
+        "Current stock covers predicted lead-time demand and sits above the minimum stock level.",
+    )
