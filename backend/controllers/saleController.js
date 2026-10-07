@@ -49,3 +49,23 @@ exports.bulkCreateSales = async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 };
+
+exports.deleteSale = async (req, res) => {
+  try {
+    const sale = await Sale.findById(req.params.id);
+    if (!sale) return res.status(404).json({ error: "Sale not found" });
+
+    // Restore the sold quantity back to product's stock
+    const productDoc = await Product.findById(sale.product);
+    if (productDoc) {
+      productDoc.currentStock += sale.quantitySold;
+      await productDoc.save();
+    }
+
+    await Sale.findByIdAndDelete(req.params.id);
+    res.json({ message: "Sale deleted successfully", updatedStock: productDoc ? productDoc.currentStock : null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
