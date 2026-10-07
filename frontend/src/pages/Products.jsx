@@ -3,29 +3,51 @@ import api from "../api/client";
 import {
   Package,
   PlusCircle,
-  Search,
-  CheckCircle2,
   AlertTriangle,
   Building2,
-  DollarSign,
-  Layers,
+  Boxes,
+  Search,
+  Tag,
+  CheckCircle2,
 } from "lucide-react";
 
 const emptyForm = {
   name: "",
-  category: "",
+  category: "General",
   unitPrice: "",
   minStockLevel: "10",
-  maxStockLevel: "200",
-  currentStock: "",
+  maxStockLevel: "100",
+  currentStock: "0",
   supplier: "",
 };
+
+function TrashIcon({ className = "w-4 h-4" }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M3 6h18" />
+      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+      <line x1="10" y1="11" x2="10" y2="17" />
+      <line x1="14" y1="11" x2="14" y2="17" />
+    </svg>
+  );
+}
 
 export default function Products() {
   const [products, setProducts] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [search, setSearch] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -58,11 +80,32 @@ export default function Products() {
       setForm(emptyForm);
       setError("");
       setShowAddForm(false);
+      setSuccess("Product added successfully!");
+      setTimeout(() => setSuccess(""), 4000);
       load();
     } catch (err) {
       setError(err.response?.data?.error || "Failed to create product SKU");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id, name) => {
+    if (
+      !window.confirm(
+        `Are you sure you want to delete "${name}"? This will also remove associated sales and stock movements.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await api.delete(`/products/${id}`);
+      setError("");
+      setSuccess(`Product "${name}" deleted. AI recommendations updated.`);
+      setTimeout(() => setSuccess(""), 4000);
+      load();
+    } catch (err) {
+      setError(err.response?.data?.error || "Failed to delete product");
     }
   };
 
@@ -108,6 +151,12 @@ export default function Products() {
         </div>
       )}
 
+      {success && (
+        <div className="p-4 rounded-xl bg-teal-500/10 border border-teal-500/30 text-xs text-teal-300">
+          {success}
+        </div>
+      )}
+
       {/* Add Product Form */}
       {showAddForm && (
         <div className="glass-card rounded-2xl p-6 relative overflow-hidden animate-fadeIn">
@@ -123,11 +172,11 @@ export default function Products() {
           <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <label className="text-[11px] font-mono text-slate-400 uppercase tracking-wider block mb-1.5 font-semibold">
-                SKU / Product Name
+                SKU Name
               </label>
               <input
                 name="name"
-                placeholder="e.g. Ultra Gaming Laptop 16"
+                placeholder="e.g. Wireless Ergonomic Mouse"
                 value={form.name}
                 onChange={handleChange}
                 className="input text-xs"
@@ -141,11 +190,10 @@ export default function Products() {
               </label>
               <input
                 name="category"
-                placeholder="e.g. Computers, Peripherals"
+                placeholder="e.g. Peripherals"
                 value={form.category}
                 onChange={handleChange}
                 className="input text-xs"
-                required
               />
             </div>
 
@@ -157,7 +205,7 @@ export default function Products() {
                 name="unitPrice"
                 type="number"
                 min="0"
-                placeholder="e.g. 1250"
+                placeholder="e.g. 4500"
                 value={form.unitPrice}
                 onChange={handleChange}
                 className="input text-xs"
@@ -167,55 +215,52 @@ export default function Products() {
 
             <div>
               <label className="text-[11px] font-mono text-slate-400 uppercase tracking-wider block mb-1.5 font-semibold">
-                Initial On-Hand Stock
+                Initial On-Hand Quantity
               </label>
               <input
                 name="currentStock"
                 type="number"
                 min="0"
-                placeholder="e.g. 25"
+                placeholder="e.g. 50"
                 value={form.currentStock}
                 onChange={handleChange}
                 className="input text-xs"
-                required
               />
             </div>
 
             <div>
               <label className="text-[11px] font-mono text-slate-400 uppercase tracking-wider block mb-1.5 font-semibold">
-                Safety Min Threshold
+                Min Safety Buffer
               </label>
               <input
                 name="minStockLevel"
                 type="number"
                 min="0"
-                placeholder="e.g. 10"
+                placeholder="e.g. 15"
                 value={form.minStockLevel}
                 onChange={handleChange}
                 className="input text-xs"
-                required
               />
             </div>
 
             <div>
               <label className="text-[11px] font-mono text-slate-400 uppercase tracking-wider block mb-1.5 font-semibold">
-                Maximum Warehouse Capacity
+                Max Stock Ceiling
               </label>
               <input
                 name="maxStockLevel"
                 type="number"
                 min="0"
-                placeholder="e.g. 200"
+                placeholder="e.g. 250"
                 value={form.maxStockLevel}
                 onChange={handleChange}
                 className="input text-xs"
-                required
               />
             </div>
 
-            <div className="sm:col-span-2 lg:col-span-2">
+            <div className="sm:col-span-2 lg:col-span-3">
               <label className="text-[11px] font-mono text-slate-400 uppercase tracking-wider block mb-1.5 font-semibold">
-                Linked Supplier
+                Assigned Logistics Vendor
               </label>
               <select
                 name="supplier"
@@ -223,42 +268,42 @@ export default function Products() {
                 onChange={handleChange}
                 className="input text-xs"
               >
-                <option value="">No vendor assigned</option>
+                <option value="">Unassigned (Self-sourced)</option>
                 {suppliers.map((s) => (
                   <option key={s._id} value={s._id}>
-                    {s.name} · {s.leadTimeDays}d lead · {s.deliveryPerformance}% SLA
+                    {s.name} (SLA: {s.leadTimeDays}d lead, {s.deliveryPerformance}% reliability)
                   </option>
                 ))}
               </select>
             </div>
 
-            <div className="flex items-end">
+            <div className="sm:col-span-2 lg:col-span-3 flex justify-end">
               <button
                 type="submit"
                 disabled={submitting}
-                className="btn-primary w-full h-[42px] text-xs font-semibold"
+                className="btn-primary text-xs"
               >
                 <PlusCircle className="w-4 h-4" />
-                <span>{submitting ? "Registering..." : "Save Product SKU"}</span>
+                <span>{submitting ? "Registering SKU..." : "Confirm & Save Product SKU"}</span>
               </button>
             </div>
           </form>
         </div>
       )}
 
-      {/* Catalog Table */}
-      <div className="glass-card rounded-2xl overflow-hidden">
-        <div className="p-5 border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-4">
+      {/* Products Table Card */}
+      <div className="glass-card rounded-2xl p-6 relative overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
           <div>
-            <h2 className="font-display font-semibold text-lg text-white">Catalog Master Directory</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Real-time inventory levels against minimum safety thresholds.</p>
+            <h2 className="font-display font-semibold text-lg text-white">Catalog Inventory Matrix</h2>
+            <p className="text-xs text-slate-400">Policy thresholds dictate automated replenishment alert triggers.</p>
           </div>
 
           <div className="relative w-full sm:w-64">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               type="text"
-              placeholder="Search catalog..."
+              placeholder="Search SKUs or vendors..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="input pl-9 py-2 text-xs"
@@ -277,12 +322,13 @@ export default function Products() {
                 <th className="px-5 py-3.5">Stock Capacity Bar</th>
                 <th className="px-5 py-3.5">Policy (Min/Max)</th>
                 <th className="px-5 py-3.5">Assigned Supplier</th>
+                <th className="px-5 py-3.5 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 font-mono">
               {filteredProducts.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="px-5 py-10 text-center text-slate-500 font-sans">
+                  <td colSpan="8" className="px-5 py-10 text-center text-slate-500 font-sans">
                     No products found matching query.
                   </td>
                 </tr>
@@ -336,6 +382,16 @@ export default function Products() {
                         <Building2 className="w-3.5 h-3.5 text-slate-500" />
                         {p.supplier?.name || "Unassigned"}
                       </td>
+                      <td className="px-5 py-3.5 text-right font-sans">
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(p._id, p.name)}
+                          title="Delete product"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition inline-flex items-center justify-center"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </td>
                     </tr>
                   );
                 })
@@ -347,4 +403,3 @@ export default function Products() {
     </div>
   );
 }
-

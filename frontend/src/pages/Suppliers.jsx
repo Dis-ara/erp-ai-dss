@@ -13,10 +13,32 @@ import {
 
 const emptyForm = { name: "", leadTimeDays: "", deliveryPerformance: "90", productAvailability: "High" };
 
+function TrashIcon({ className = "w-4 h-4" }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M3 6h18" />
+      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+      <line x1="10" y1="11" x2="10" y2="17" />
+      <line x1="14" y1="11" x2="14" y2="17" />
+    </svg>
+  );
+}
+
 export default function Suppliers() {
   const [suppliers, setSuppliers] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [search, setSearch] = useState("");
@@ -44,11 +66,28 @@ export default function Suppliers() {
       setForm(emptyForm);
       setError("");
       setShowAddForm(false);
+      setSuccess("Supplier added successfully!");
+      setTimeout(() => setSuccess(""), 4000);
       loadSuppliers();
     } catch (err) {
       setError(err.response?.data?.error || "Failed to onboard supplier");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id, name) => {
+    if (!window.confirm(`Are you sure you want to delete supplier "${name}"?`)) {
+      return;
+    }
+    try {
+      await api.delete(`/suppliers/${id}`);
+      setError("");
+      setSuccess(`Supplier "${name}" deleted.`);
+      setTimeout(() => setSuccess(""), 4000);
+      loadSuppliers();
+    } catch (err) {
+      setError(err.response?.data?.error || "Failed to delete supplier");
     }
   };
 
@@ -86,6 +125,12 @@ export default function Suppliers() {
       {error && (
         <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300">
           {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="p-4 rounded-xl bg-teal-500/10 border border-teal-500/30 text-xs text-teal-300">
+          {success}
         </div>
       )}
 
@@ -179,6 +224,20 @@ export default function Suppliers() {
         </div>
       )}
 
+      {/* Search Bar */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <input
+            type="text"
+            placeholder="Search vendors by name..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="input pl-9 py-2 text-xs"
+          />
+        </div>
+      </div>
+
       {/* Vendor Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {filteredSuppliers.map((s) => {
@@ -210,17 +269,27 @@ export default function Suppliers() {
                     </div>
                   </div>
 
-                  <span
-                    className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
-                      s.productAvailability === "High"
-                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                        : s.productAvailability === "Medium"
-                        ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                        : "bg-rose-500/10 text-rose-400 border-rose-500/20"
-                    }`}
-                  >
-                    {s.productAvailability || "High"} Supply
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+                        s.productAvailability === "High"
+                          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                          : s.productAvailability === "Medium"
+                          ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                          : "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                      }`}
+                    >
+                      {s.productAvailability || "High"} Supply
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(s._id, s.name)}
+                      title="Delete supplier"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition inline-flex items-center justify-center"
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 mb-4">
@@ -262,8 +331,10 @@ export default function Suppliers() {
             </div>
           );
         })}
+        {filteredSuppliers.length === 0 && (
+          <p className="text-slate-500 col-span-3 text-center py-8">No suppliers recorded matching criteria.</p>
+        )}
       </div>
     </div>
   );
 }
-

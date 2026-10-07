@@ -1,4 +1,6 @@
 const Product = require("../models/Product");
+const Sale = require("../models/Sale");
+const InventoryTransaction = require("../models/InventoryTransaction");
 
 exports.getProducts = async (req, res) => {
   try {
@@ -45,8 +47,14 @@ exports.deleteProduct = async (req, res) => {
   try {
     const product = await Product.findByIdAndDelete(req.params.id);
     if (!product) return res.status(404).json({ error: "Product not found" });
-    res.json({ message: "Product deleted" });
+
+    // Cascade delete any sales and inventory movements linked to this product
+    await Sale.deleteMany({ product: req.params.id });
+    await InventoryTransaction.deleteMany({ product: req.params.id });
+
+    res.json({ message: "Product and associated records deleted" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
+

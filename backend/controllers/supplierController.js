@@ -1,4 +1,5 @@
 const Supplier = require("../models/Supplier");
+const Product = require("../models/Product");
 
 exports.getSuppliers = async (req, res) => {
   try {
@@ -35,8 +36,13 @@ exports.deleteSupplier = async (req, res) => {
   try {
     const supplier = await Supplier.findByIdAndDelete(req.params.id);
     if (!supplier) return res.status(404).json({ error: "Supplier not found" });
+
+    // Unset supplier reference in products that referenced this supplier
+    await Product.updateMany({ supplier: req.params.id }, { $unset: { supplier: "" } });
+
     res.json({ message: "Supplier deleted" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
+

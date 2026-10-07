@@ -72,3 +72,27 @@ exports.getInventorySummary = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+exports.deleteTransaction = async (req, res) => {
+  try {
+    const transaction = await InventoryTransaction.findById(req.params.id);
+    if (!transaction) return res.status(404).json({ error: "Transaction not found" });
+
+    // Revert the stock effect on the product
+    const productDoc = await Product.findById(transaction.product);
+    if (productDoc) {
+      if (transaction.type === "IN") {
+        productDoc.currentStock = Math.max(0, productDoc.currentStock - transaction.quantity);
+      } else if (transaction.type === "OUT") {
+        productDoc.currentStock += transaction.quantity;
+      }
+      await productDoc.save();
+    }
+
+    await InventoryTransaction.findByIdAndDelete(req.params.id);
+    res.json({ message: "Transaction deleted successfully", updatedStock: productDoc ? productDoc.currentStock : null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+

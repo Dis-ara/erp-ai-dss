@@ -3,23 +3,43 @@ import api from "../api/client";
 import {
   TrendingUp,
   DollarSign,
-  Package,
   PlusCircle,
   Calendar,
   Layers,
   Search,
   CheckCircle2,
-  Clock,
-  Sparkles,
+  Trash2,
 } from "lucide-react";
 
-const empty = { product: "", quantitySold: "", sellingPrice: "", date: "", season: "Normal" };
+const empty = { product: "", quantitySold: "", sellingPrice: "", season: "Normal", date: "" };
+
+function TrashIcon({ className = "w-4 h-4" }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M3 6h18" />
+      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+      <line x1="10" y1="11" x2="10" y2="17" />
+      <line x1="14" y1="11" x2="14" y2="17" />
+    </svg>
+  );
+}
 
 export default function Sales() {
   const [sales, setSales] = useState([]);
   const [products, setProducts] = useState([]);
   const [form, setForm] = useState(empty);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [search, setSearch] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -59,11 +79,32 @@ export default function Sales() {
       });
       setForm(empty);
       setError("");
+      setSuccess("Sale recorded successfully!");
+      setTimeout(() => setSuccess(""), 4000);
       load();
     } catch (err) {
       setError(err.response?.data?.error || "Failed to record sale");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id, productName, qty) => {
+    if (
+      !window.confirm(
+        `Are you sure you want to delete this sale record (${productName} - Qty: ${qty})? This will restore the quantity back to the product stock.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await api.delete(`/sales/${id}`);
+      setError("");
+      setSuccess(`Sale record deleted and product stock restored. AI forecast updated.`);
+      setTimeout(() => setSuccess(""), 4000);
+      load();
+    } catch (err) {
+      setError(err.response?.data?.error || "Failed to delete sale");
     }
   };
 
@@ -130,18 +171,24 @@ export default function Sales() {
         <div className="glass-card rounded-2xl p-5 relative overflow-hidden group">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400 font-semibold">Average Order Value</span>
-            <div className="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-teal-500/10 text-teal-400 border border-teal-500/20 flex items-center justify-center">
               <Layers className="w-4 h-4" />
             </div>
           </div>
           <p className="text-2xl font-mono font-bold text-white">Rs. {avgOrderValue.toLocaleString()}</p>
-          <p className="text-xs text-slate-400 mt-1">Per transaction ticket</p>
+          <p className="text-xs text-slate-400 mt-1">Per transaction average</p>
         </div>
       </div>
 
       {error && (
         <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300">
           {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="p-4 rounded-xl bg-teal-500/10 border border-teal-500/30 text-xs text-teal-300">
+          {success}
         </div>
       )}
 
@@ -153,13 +200,13 @@ export default function Sales() {
           Log Outflow Transaction
         </h2>
         <p className="text-xs text-slate-400 mb-5">
-          Record customer sale to instantly decrement inventory and update time-series demand models.
+          Deducts live inventory immediately and updates the historical sequence fed to the linear model.
         </p>
 
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5 items-end">
-          <div className="lg:col-span-2">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div>
             <label className="text-[11px] font-mono text-slate-400 uppercase tracking-wider block mb-1.5 font-semibold">
-              Select Product SKU
+              Product SKU
             </label>
             <select
               name="product"
@@ -168,7 +215,7 @@ export default function Sales() {
               className="input text-xs"
               required
             >
-              <option value="">Select target product...</option>
+              <option value="">Select Catalog Item</option>
               {products.map((p) => (
                 <option key={p._id} value={p._id}>
                   {p.name} ({p.currentStock} in stock)
@@ -185,23 +232,24 @@ export default function Sales() {
               name="quantitySold"
               type="number"
               min="1"
-              placeholder="e.g. 5"
+              placeholder="e.g. 25"
               value={form.quantitySold}
               onChange={handleChange}
               className="input text-xs"
               required
-            />
+            >
+            </input>
           </div>
 
           <div>
             <label className="text-[11px] font-mono text-slate-400 uppercase tracking-wider block mb-1.5 font-semibold">
-              Unit Price (Rs.)
+              Selling Price (Rs.)
             </label>
             <input
               name="sellingPrice"
               type="number"
               min="0"
-              placeholder="Price"
+              placeholder="Auto-filled from SKU"
               value={form.sellingPrice}
               onChange={handleChange}
               className="input text-xs"
@@ -211,7 +259,24 @@ export default function Sales() {
 
           <div>
             <label className="text-[11px] font-mono text-slate-400 uppercase tracking-wider block mb-1.5 font-semibold">
-              Sale Date
+              Sales Season
+            </label>
+            <select
+              name="season"
+              value={form.season}
+              onChange={handleChange}
+              className="input text-xs"
+            >
+              <option value="Normal">Normal Period</option>
+              <option value="Peak">Peak Season</option>
+              <option value="Festival">Festival Surge</option>
+              <option value="Off-Peak">Off-Peak Lull</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="text-[11px] font-mono text-slate-400 uppercase tracking-wider block mb-1.5 font-semibold">
+              Transaction Date
             </label>
             <input
               name="date"
@@ -222,28 +287,27 @@ export default function Sales() {
             />
           </div>
 
-          <div>
+          <div className="sm:col-span-2 lg:col-span-5 flex justify-end">
             <button
               type="submit"
               disabled={submitting}
-              className="btn-primary w-full h-[42px] text-xs font-semibold"
+              className="btn-primary text-xs"
             >
               <PlusCircle className="w-4 h-4" />
-              <span>{submitting ? "Posting..." : "Record Outflow"}</span>
+              <span>{submitting ? "Posting..." : "Commit Sale & Update Stock"}</span>
             </button>
           </div>
         </form>
       </div>
 
-      {/* Sales History Ledger */}
-      <div className="glass-card rounded-2xl overflow-hidden">
-        <div className="p-5 border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-4">
+      {/* Historical Ledger Table */}
+      <div className="glass-card rounded-2xl p-6 relative overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
           <div>
-            <h2 className="font-display font-semibold text-lg text-white">Transaction History</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Audit ledger of verified stock decrement records.</p>
+            <h2 className="font-display font-semibold text-lg text-white">Historical Outflow Ledger</h2>
+            <p className="text-xs text-slate-400">Chronological transaction journal used as AI input dataset.</p>
           </div>
 
-          {/* Search Box */}
           <div className="relative w-full sm:w-64">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
@@ -267,12 +331,13 @@ export default function Sales() {
                 <th className="px-5 py-3.5">Total Value</th>
                 <th className="px-5 py-3.5">Cycle Season</th>
                 <th className="px-5 py-3.5">Ledger Status</th>
+                <th className="px-5 py-3.5 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 font-mono">
               {filteredSales.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="px-5 py-10 text-center text-slate-500 font-sans">
+                  <td colSpan="8" className="px-5 py-10 text-center text-slate-500 font-sans">
                     No transactions matched your criteria.
                   </td>
                 </tr>
@@ -309,6 +374,16 @@ export default function Sales() {
                           Stock Deducted
                         </span>
                       </td>
+                      <td className="px-5 py-3.5 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(s._id, s.product?.name || "Product", s.quantitySold)}
+                          title="Delete sale record"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition inline-flex items-center justify-center"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </td>
                     </tr>
                   );
                 })
@@ -320,4 +395,3 @@ export default function Sales() {
     </div>
   );
 }
-
