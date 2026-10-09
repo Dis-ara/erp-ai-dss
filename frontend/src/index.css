@@ -4,42 +4,103 @@
 
 :root {
   color-scheme: dark;
+  --bg-primary: #090d16;
+  --bg-surface: #0f172a;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-card: rgba(148, 163, 184, 0.12);
 }
 
 body {
-  @apply text-slate-100 antialiased;
-  font-family: "Outfit", system-ui, sans-serif;
-  background:
-    radial-gradient(1200px 600px at 10% -10%, rgba(45, 212, 191, 0.18), transparent 50%),
-    radial-gradient(900px 500px at 100% 0%, rgba(99, 102, 241, 0.22), transparent 45%),
-    radial-gradient(800px 500px at 50% 120%, rgba(244, 114, 182, 0.12), transparent 40%),
-    #070b16;
+  @apply text-slate-100 antialiased selection:bg-teal-500/30 selection:text-teal-200;
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: #070a12;
+  background-image:
+    radial-gradient(at 0% 0%, rgba(20, 184, 166, 0.07) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(99, 102, 241, 0.08) 0px, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(14, 165, 233, 0.05) 0px, transparent 50%);
+  background-attachment: fixed;
   min-height: 100vh;
 }
 
-h1, h2, .font-display {
-  font-family: "Syne", "Outfit", sans-serif;
+h1, h2, h3, .font-display {
+  font-family: "Outfit", "Inter", sans-serif;
+  letter-spacing: -0.025em;
 }
 
+.font-mono {
+  font-family: "JetBrains Mono", monospace;
+}
+
+/* Luxury Glass Card */
 .glass {
-  @apply bg-white/5 border border-white/10 backdrop-blur-xl shadow-2xl;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5), 0 0 1px 1px rgba(255, 255, 255, 0.04) inset;
 }
 
+.glass-card {
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.45);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  transform: translateY(-1px);
+  box-shadow: 0 16px 32px -8px rgba(0, 0, 0, 0.6), 0 0 20px -5px rgba(20, 184, 166, 0.1);
+}
+
+/* Luxury Inputs */
 .input {
-  @apply w-full rounded-xl bg-slate-950/60 border border-white/10 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-teal-400/70 focus:ring-2 focus:ring-teal-400/20;
+  @apply w-full rounded-xl bg-slate-950/70 border border-slate-800/90 px-3.5 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition-all duration-150;
 }
 
+.input:focus {
+  @apply border-teal-500/70 ring-2 ring-teal-500/20 bg-slate-950/90;
+}
+
+/* Executive Buttons */
 .btn-primary {
-  @apply rounded-xl bg-gradient-to-r from-teal-400 to-indigo-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:opacity-90 transition;
+  @apply inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-500 via-teal-400 to-emerald-400 px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-lg shadow-teal-500/20 hover:shadow-teal-500/30 hover:brightness-105 active:scale-[0.98] transition-all duration-150;
 }
 
+.btn-secondary {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 px-4 py-2 text-sm font-medium text-slate-200 hover:text-white transition-all duration-150;
+}
+
+.btn-ghost {
+  @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-white/5 transition-all duration-150;
+}
+
+/* Brand Spark Line */
 .spark {
-  background: linear-gradient(90deg, #2dd4bf, #818cf8, #f472b6);
-  background-size: 200% 100%;
-  animation: shimmer 8s linear infinite;
+  background: linear-gradient(90deg, #14b8a6, #6366f1, #0ea5e9, #14b8a6);
+  background-size: 300% 100%;
+  animation: shimmer 12s linear infinite;
 }
 
 @keyframes shimmer {
   0% { background-position: 0% 50%; }
-  100% { background-position: 200% 50%; }
+  100% { background-position: 300% 50%; }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #090d16;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
 }

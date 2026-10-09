@@ -1,38 +1,76 @@
 export default function StatCard({ label, value, hint, tone = "teal", badge = null, icon = null }) {
-  const glow = {
-    teal: "from-teal-400/20 to-transparent border-teal-500/20",
-    amber: "from-amber-400/20 to-transparent border-amber-500/20",
-    rose: "from-rose-400/25 to-transparent border-rose-500/20",
-    indigo: "from-indigo-400/20 to-transparent border-indigo-500/20",
-    purple: "from-purple-400/20 to-transparent border-purple-500/20",
-    cyan: "from-cyan-400/20 to-transparent border-cyan-500/20",
-    emerald: "from-emerald-400/20 to-transparent border-emerald-500/20",
-  }[tone] || "from-teal-400/20 to-transparent border-teal-500/20";
-
-  const badgeTone = {
-    teal: "bg-teal-400/10 text-teal-300 border-teal-400/30",
-    amber: "bg-amber-400/10 text-amber-300 border-amber-400/30",
-    rose: "bg-rose-400/15 text-rose-300 border-rose-400/30",
-    indigo: "bg-indigo-400/10 text-indigo-300 border-indigo-400/30",
-    purple: "bg-purple-400/10 text-purple-300 border-purple-400/30",
-  }[tone] || "bg-teal-400/10 text-teal-300 border-teal-400/30";
+  const tones = {
+    teal: {
+      bg: "bg-teal-500/10 text-teal-400 border-teal-500/20",
+      accent: "from-teal-500/20 to-transparent",
+      topLine: "via-teal-400/40",
+      iconBg: "bg-teal-500/10 text-teal-400 border-teal-500/20",
+    },
+    amber: {
+      bg: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+      accent: "from-amber-500/20 to-transparent",
+      topLine: "via-amber-400/40",
+      iconBg: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+    },
+    rose: {
+      bg: "bg-rose-500/10 text-rose-400 border-rose-500/20",
+      accent: "from-rose-500/20 to-transparent",
+      topLine: "via-rose-400/40",
+      iconBg: "bg-rose-500/10 text-rose-400 border-rose-500/20",
+    },
+    indigo: {
+      bg: "bg-indigo-500/10 text-indigo-400 border-indigo-500/20",
+      accent: "from-indigo-500/20 to-transparent",
+      topLine: "via-indigo-400/40",
+      iconBg: "bg-indigo-500/10 text-indigo-400 border-indigo-500/20",
+    },
+    emerald: {
+      bg: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+      accent: "from-emerald-500/20 to-transparent",
+      topLine: "via-emerald-400/40",
+      iconBg: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    },
+    cyan: {
+      bg: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
+      accent: "from-cyan-500/20 to-transparent",
+      topLine: "via-cyan-400/40",
+      iconBg: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
+    },
+  }[tone] || {
+    bg: "bg-teal-500/10 text-teal-400 border-teal-500/20",
+    accent: "from-teal-500/20 to-transparent",
+    topLine: "via-teal-400/40",
+    iconBg: "bg-teal-500/10 text-teal-400 border-teal-500/20",
+  };
 
   return (
-    <div className={`glass rounded-2xl p-5 relative overflow-hidden transition-all duration-300 hover:border-white/20 group`}>
-      <div className={`absolute inset-0 bg-gradient-to-br ${glow} pointer-events-none opacity-80 group-hover:opacity-100 transition-opacity`} />
-      <div className="flex items-start justify-between relative z-10">
-        <p className="text-xs uppercase tracking-widest text-slate-400">{label}</p>
-        {icon && <div className="text-slate-400 group-hover:text-slate-200 transition-colors">{icon}</div>}
+    <div className="glass-card rounded-2xl p-5 relative overflow-hidden group">
+      {/* Top Hairline Accent */}
+      <div className={`absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent ${tones.topLine} to-transparent`} />
+      
+      {/* Subtle corner radial */}
+      <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${tones.accent} rounded-full blur-2xl pointer-events-none opacity-40 group-hover:opacity-70 transition-opacity`} />
+
+      <div className="flex items-center justify-between relative z-10 mb-3">
+        <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400 font-semibold">{label}</span>
+        {icon && (
+          <div className={`w-8 h-8 rounded-lg border flex items-center justify-center ${tones.iconBg} transition-transform group-hover:scale-110 duration-200`}>
+            {icon}
+          </div>
+        )}
       </div>
-      <div className="flex items-baseline gap-2 mt-2 relative z-10">
-        <p className="text-2xl sm:text-3xl font-semibold tabular-nums tracking-tight text-white">{value}</p>
+
+      <div className="flex items-baseline gap-2 relative z-10">
+        <p className="text-2xl sm:text-3xl font-mono font-bold tracking-tight text-white">{value}</p>
         {badge && (
-          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${badgeTone}`}>
+          <span className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full border ${tones.bg}`}>
             {badge}
           </span>
         )}
       </div>
-      {hint && <p className="text-xs text-slate-400 mt-2 relative z-10">{hint}</p>}
+
+      {hint && <p className="text-xs text-slate-400 mt-2.5 relative z-10">{hint}</p>}
     </div>
   );
 }
+
